@@ -1,0 +1,56 @@
+# Prometheus scrape config for WikiPulse.
+# The FastAPI app exposes /metrics on :8000; each streaming service runs a
+# dedicated prometheus_client HTTP server on its own metrics port.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: wikipulse
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: wikipulse-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend-api:8000"]
+        labels:
+          service: api
+
+  - job_name: wikipulse-producer
+    static_configs:
+      - targets: ["producer:9101"]
+        labels:
+          service: producer
+
+  - job_name: wikipulse-demux
+    static_configs:
+      - targets: ["demux:9102"]
+        labels:
+          service: demux
+
+  - job_name: wikipulse-indexer
+    static_configs:
+      - targets: ["indexer:9103"]
+        labels:
+          service: indexer
+
+  - job_name: wikipulse-analytics
+    static_configs:
+      - targets: ["analytics:9104"]
+        labels:
+          service: analytics
+
+  - job_name: wikipulse-vandalism
+    static_configs:
+      - targets: ["vandalism:9105"]
+        labels:
+          service: vandalism
+
+  - job_name: wikipulse-scheduler
+    static_configs:
+      - targets: ["scheduler:9106"]
+        labels:
+          service: scheduler
