@@ -1,0 +1,13 @@
+# Backend Python dependencies
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+psycopg[binary]==3.2.3
+sqlalchemy==2.0.36
+alembic==1.14.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+httpx==0.28.1
+elasticsearch==8.17.0
+confluent-kafka==2.6.1
+websockets==14.1
