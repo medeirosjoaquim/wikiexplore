@@ -1,5 +1,15 @@
 # WikiPulse
 
+[![CI](https://github.com/medeirosjoaquim/wikiexplore/actions/workflows/ci.yml/badge.svg)](https://github.com/medeirosjoaquim/wikiexplore/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-7.7-231F20?logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
+[![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8.17-06B8D4?logo=elasticsearch&logoColor=white)](https://www.elastic.co/elasticsearch/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Ruff](https://img.shields.io/badge/lint-ruff-261230?logo=ruff&logoColor=white)](https://docs.astral.sh/ruff/)
+[![License](https://img.shields.io/badge/license-MIT-green)](#license)
+
 Real-time Wikipedia edit monitoring: ingests the public Wikimedia EventStreams
 feed through an event-driven pipeline (Kafka → Elasticsearch + PostgreSQL),
 with live search, hourly analytics, 3-hour consolidation, heuristic vandalism
@@ -275,3 +285,10 @@ frontend/
   src/{App.jsx,api.js,styles.css,components/*.jsx}
 docker-compose.yml
 Makefile
+```
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).
