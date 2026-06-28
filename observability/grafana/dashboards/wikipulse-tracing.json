@@ -1,0 +1,72 @@
+{
+  "title": "WikiPulse — Distributed Tracing",
+  "uid": "wikipulse-tracing",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "refresh": "15s",
+  "tags": ["wikipulse"],
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Recent traces (producer → demux → consumers)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "expr": "{ resource.service.name =~ \"wikipulse.+\" }",
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Slow traces (> 1s)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 10 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "expr": "{ resource.service.name =~ \"wikipulse.+\" } | duration > 1s",
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Vandalism-scoring traces",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 10 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "expr": "{ resource.service.name = \"wikipulse-vandalism\" }",
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "text",
+      "title": "How to use this dashboard",
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 19 },
+      "options": {
+        "mode": "markdown",
+        "content": "Each trace spans the full pipeline via W3C context propagated through Kafka:\n\n**producer.handle_event → producer.kafka_produce → demux.forward → { indexer.index_event, analytics.queue_event, vandalism.score }**\n\nClick any trace ID to open the waterfall view. For ad-hoc exploration, use **Explore → Tempo** with TraceQL, e.g. `{ resource.service.name = \"wikipulse-producer\" } | duration > 500ms`."
+      }
+    }
+  ]
+}

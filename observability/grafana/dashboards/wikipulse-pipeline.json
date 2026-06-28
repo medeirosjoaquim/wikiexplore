@@ -1,0 +1,99 @@
+{
+  "title": "WikiPulse — Pipeline & Consumers",
+  "uid": "wikipulse-pipeline",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "refresh": "15s",
+  "tags": ["wikipulse"],
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Throughput per pipeline stage (events/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(wikipulse_producer_events_total{outcome=\"published\"}[1m]))", "legendFormat": "producer" },
+        { "refId": "B", "expr": "sum(rate(wikipulse_demux_forwarded_total[1m]))", "legendFormat": "demux (forwarded)" },
+        { "refId": "C", "expr": "sum(rate(wikipulse_indexer_events_total{outcome=\"indexed\"}[1m]))", "legendFormat": "indexer -> ES" },
+        { "refId": "D", "expr": "sum(rate(wikipulse_analytics_events_total{outcome=\"applied\"}[1m]))", "legendFormat": "analytics -> PG" },
+        { "refId": "E", "expr": "sum(rate(wikipulse_vandalism_events_total[1m]))", "legendFormat": "vandalism (scored)" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Stage processing latency (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le, stage) (rate(wikipulse_event_processing_seconds_bucket[5m])))", "legendFormat": "{{stage}} p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le, stage) (rate(wikipulse_event_processing_seconds_bucket[5m])))", "legendFormat": "{{stage}} p95" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Batch sizes",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(wikipulse_bulk_index_batch_size_sum[5m]) / clamp_min(rate(wikipulse_bulk_index_batch_size_count[5m]), 1)", "legendFormat": "ES docs/bulk" },
+        { "refId": "B", "expr": "rate(wikipulse_upsert_batch_size_sum[5m]) / clamp_min(rate(wikipulse_upsert_batch_size_count[5m]), 1)", "legendFormat": "PG rows/upsert" },
+        { "refId": "C", "expr": "rate(wikipulse_kafka_poll_batch_size_sum[5m]) / clamp_min(rate(wikipulse_kafka_poll_batch_size_count[5m]), 1)", "legendFormat": "{{consumer}} msgs/poll" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Errors & dead-letters (events/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(wikipulse_producer_events_total{outcome=\"deadlettered\"}[5m]))", "legendFormat": "producer dead-lettered" },
+        { "refId": "B", "expr": "sum(rate(wikipulse_indexer_events_total{outcome=\"error\"}[5m]))", "legendFormat": "ES index errors" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Memory (RSS) by service",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "max by (service) (process_resident_memory_bytes)", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "CPU (cores) by service",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "cores" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (service) (rate(process_cpu_seconds_total[1m]))", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Scheduler runs (runs/min) by job",
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 23 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "opm" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (job) (rate(wikipulse_scheduler_runs_total[5m])) * 60", "legendFormat": "{{job}}" }
+      ]
+    }
+  ]
+}
