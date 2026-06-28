@@ -110,6 +110,17 @@ class Settings:
     # Consolidation
     consolidation_window_hours: int = int(_env("CONSOLIDATION_WINDOW_HOURS", "3"))
 
+    # ── Observability (metrics + OpenTelemetry traces) ────────
+    otel_enabled: bool = _env("OTEL_ENABLED", "true").lower() == "true"
+    otel_exporter_otlp_traces_endpoint: str = _env(
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://tempo:4318/v1/traces"
+    )
+    otel_service_name: str = _env("OTEL_SERVICE_NAME", "wikipulse")
+    otel_service_instance: str = _env("OTEL_SERVICE_INSTANCE", "api")
+    otel_resource_environment: str = _env("OTEL_RESOURCE_ENVIRONMENT", _env("APP_ENV", "development"))
+    metrics_enabled: bool = _env("METRICS_ENABLED", "true").lower() == "true"
+    metrics_port: int = int(_env("METRICS_PORT", "9100"))
+
     @property
     def kafka_topics(self) -> dict[str, dict[str, object]]:
         """Topic name -> {partitions, replication_factor, config}."""

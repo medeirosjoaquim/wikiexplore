@@ -75,11 +75,16 @@ def produce(
     whether to retry, block, or dead-letter. ``key`` enables partition affinity
     (we key on language so a single language's edits stay ordered).
     """
+    # Merge the active W3C trace context into the headers so downstream
+    # consumers (demux/indexer/analytics/vandalism) continue the same trace.
+    from app.observability import headers_with_context
+
+    final_headers = headers_with_context(headers)
     producer.produce(
         topic=topic,
         value=serialize(value),
         key=key.encode("utf-8") if key else None,
-        headers=[(k, v.encode("utf-8")) for k, v in (headers or {}).items()] or None,
+        headers=final_headers,
         on_delivery=on_delivery or _delivery_report,
     )
     producer.poll(0)

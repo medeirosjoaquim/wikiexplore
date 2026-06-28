@@ -16,9 +16,11 @@ class _Hub:
     async def connect(self, ws: WebSocket) -> None:
         await ws.accept()
         self.clients.add(ws)
+        _set_clients()
 
     def disconnect(self, ws: WebSocket) -> None:
         self.clients.discard(ws)
+        _set_clients()
 
     async def broadcast(self, message: dict) -> None:
         payload = json.dumps(message, default=str)
@@ -30,6 +32,17 @@ class _Hub:
                 dead.append(ws)
         for ws in dead:
             self.clients.discard(ws)
+        if dead:
+            _set_clients()
+
+
+def _set_clients() -> None:
+    try:
+        from app.observability import WS_CLIENTS
+
+        WS_CLIENTS.set(len(hub.clients))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 hub = _Hub()

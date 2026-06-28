@@ -1,16 +1,18 @@
 """FastAPI application factory and routes."""
 from __future__ import annotations
 
+import contextlib
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api import analytics, live, websocket
-from app.database.session import get_db
+from app.database.session import engine, get_db
 from app.models import (
     ConsolidatedWindow,
     HourlyLanguageStats,
@@ -19,17 +21,29 @@ from app.models import (
     HourlyWikiStats,
     SuspiciousEditSummary,
 )
+from app.observability import HTTP_SECONDS, metrics_response, setup_tracing
 from app.services import live_broadcast
 from app.services.health import build_health_report
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # OpenTelemetry: export traces to Tempo, auto-instrument FastAPI + SQLAlchemy.
+    setup_tracing("wikipulse-api", "api")
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+        FastAPIInstrumentor.instrument_app(app)
+        SQLAlchemyInstrumentor().instrument(engine=engine)
+    except Exception:  # noqa: BLE001
+        pass
     await live_broadcast.start()
     try:
         yield
     finally:
         await live_broadcast.stop()
+
 
 app = FastAPI(
     title="WikiPulse API",
@@ -45,6 +59,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _record_http_latency(request: Request, call_next):
+    """Record per-endpoint request latency into the Prometheus histogram."""
+    start = time.monotonic()
+    response = await call_next(request)
+    with contextlib.suppress(Exception):
+        HTTP_SECONDS.labels(method=request.method, path=request.url.path).observe(
+            time.monotonic() - start
+        )
+    return response
+
 
 app.include_router(analytics.router, prefix="/api", tags=["analytics"])
 app.include_router(live.router, prefix="/api", tags=["live"])
@@ -63,13 +90,18 @@ def health(db: Session = Depends(get_db)) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=report)
 
 
+@app.get("/metrics")
+def metrics() -> Response:
+    """Prometheus scrape endpoint."""
+    body, headers = metrics_response()
+    return Response(content=body, media_type=headers["Content-Type"])
+
+
 @app.get("/api/overview")
 def overview(db: Session = Depends(get_db)) -> dict:
     """Latest hourly aggregate for the headline dashboard tiles."""
     row = db.execute(
-        select(HourlyWikiStats)
-        .order_by(desc(HourlyWikiStats.hour))
-        .limit(1)
+        select(HourlyWikiStats).order_by(desc(HourlyWikiStats.hour)).limit(1)
     ).scalar_one_or_none()
     if row is None:
         return {"hour": None, "total_edits": 0}
@@ -157,6 +189,7 @@ def suspicious(limit: int = Query(50, ge=1, le=500), db: Session = Depends(get_d
         }
         for r in rows
     ]
+
 
 @app.get("/api/system")
 def system(db: Session = Depends(get_db)) -> dict:

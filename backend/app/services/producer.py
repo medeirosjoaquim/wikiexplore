@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import signal
 import sys
@@ -30,6 +31,13 @@ from app.events import (
     validate,
 )
 from app.kafka import flush, make_producer, produce
+from app.observability import (
+    PRODUCER_EVENTS,
+    STAGE_SECONDS,
+    setup_tracing,
+    span,
+    start_metrics_server,
+)
 
 log = logging.getLogger("wikipulse.producer")
 
@@ -80,26 +88,24 @@ def parse_sse_lines(line: str, buffer: list[str]) -> str | None:
 
 
 async def _publish_event(producer, payload: dict) -> None:
-    produce(
-        producer,
-        settings.kafka_topic_raw,
-        payload,
-        key=payload.get("language") or "unknown",
-    )
+    language = payload.get("language") or "unknown"
+    with span("producer.kafka_produce", topic=settings.kafka_topic_raw, language=language):
+        produce(producer, settings.kafka_topic_raw, payload, key=language)
     stats.published += 1
+    PRODUCER_EVENTS.labels(outcome="published").inc()
 
 
 async def _handle_raw(producer, raw_text: str, allowed: frozenset[str]) -> None:
     """Parse one SSE ``data`` blob, normalize, validate, and publish."""
-    import json
-
     stats.seen += 1
     try:
-        raw = json.loads(raw_text)
-        event = normalize(raw)
-        validate(event, allowed)
+        with STAGE_SECONDS.labels(stage="sse_parse").time():
+            raw = json.loads(raw_text)
+            event = normalize(raw)
+            validate(event, allowed)
     except (ValidationError, json.JSONDecodeError, ValueError) as exc:
         stats.invalid += 1
+        PRODUCER_EVENTS.labels(outcome="deadlettered").inc()
         log.debug("dead-lettering invalid payload: %s", exc)
         produce(
             producer,
@@ -109,7 +115,15 @@ async def _handle_raw(producer, raw_text: str, allowed: frozenset[str]) -> None:
         )
         return
 
-    await _publish_event(producer, to_kafka_payload(event))
+    # One span per event — its context is injected into the Kafka message by
+    # ``produce`` so demux + consumers continue this trace end-to-end.
+    with span(
+        "producer.handle_event",
+        event_id=event.event_id,
+        event_type=event.event_type,
+        language=event.language,
+    ):
+        await _publish_event(producer, to_kafka_payload(event))
 
 
 async def _stream_once(producer, client: httpx.AsyncClient) -> None:
@@ -148,6 +162,16 @@ async def _stream_once(producer, client: httpx.AsyncClient) -> None:
 
 async def run_producer() -> None:
     """Reconnect-with-backoff loop. Intended to run for the process lifetime."""
+    setup_tracing("wikipulse-producer", "producer")
+    start_metrics_server()
+    # The Wikimedia SSE fetch shows up as httpx client spans inside each trace.
+    try:
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+        HTTPXClientInstrumentor().instrument()
+    except Exception:  # noqa: BLE001
+        log.warning("httpx instrumentation unavailable")
+
     producer = make_producer(client_id="wikipulse-producer")
     backoff = 2.0
     max_backoff = 60.0

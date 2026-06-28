@@ -25,6 +25,7 @@ from app.jobs.cleanup_live_data import run_cleanup as cleanup_live
 from app.jobs.cleanup_old_aggregates import run_cleanup as cleanup_agg
 from app.jobs.consolidate_3h import run_consolidation
 from app.jobs.reconcile_live import run_reconcile
+from app.observability import SCHEDULER_RUNS, setup_tracing, span, start_metrics_server
 from app.search.aliases import ensure_current_hour_index, get_client
 from app.services.runtime import configure_logging, install_signal_handlers, should_stop
 
@@ -36,10 +37,15 @@ async def _every(name: str, interval_s: int, fn, *args) -> None:
     log.info("scheduler task '%s' every %ds", name, interval_s)
     while not should_stop():
         start = time.monotonic()
+        outcome = "ok"
         try:
-            await asyncio.to_thread(fn, *args)
+            with span(f"scheduler.{name}"):
+                await asyncio.to_thread(fn, *args)
         except Exception:  # noqa: BLE001
+            outcome = "error"
             log.exception("scheduler task '%s' failed", name)
+        finally:
+            SCHEDULER_RUNS.labels(job=name, outcome=outcome).inc()
         # Sleep the remainder, but wake at most every second to notice shutdown.
         deadline = time.monotonic() + max(0.0, interval_s - (time.monotonic() - start))
         while time.monotonic() < deadline and not should_stop():
@@ -76,6 +82,8 @@ def _cleanup_agg() -> None:
 
 
 async def run_scheduler() -> None:
+    setup_tracing("wikipulse-scheduler", "scheduler")
+    start_metrics_server()
     tasks = [
         asyncio.create_task(_every("hourly_rollover", settings.scheduler_hourly_interval_s, _hourly_rollover)),
         asyncio.create_task(_every("reconcile", settings.scheduler_reconcile_interval_s, _reconcile)),
