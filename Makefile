@@ -58,6 +58,12 @@ help:
 	@echo "  make logs-scheduler     Tail scheduler logs"
 	@echo "  make restart-pipeline   Restart producer/demux/indexer/analytics/vandalism/scheduler"
 	@echo "  make pipeline           Start only the streaming pipeline services"
+	@echo ""
+	@echo "Observability:"
+	@echo "  make obs-up             Start Prometheus + Tempo + Grafana"
+	@echo "  make obs-down           Stop the observability stack"
+	@echo "  make obs-logs           Tail Prometheus/Tempo/Grafana logs"
+	@echo "  make grafana            Print Grafana URL (admin/admin)"
 	@echo "Data:"
 	@echo "  make seed               Insert synthetic dashboard data"
 	@echo "  make unseed             Remove synthetic data"
@@ -124,6 +130,24 @@ restart-pipeline:
 
 pipeline:
 	$(COMPOSE) up -d producer demux indexer analytics vandalism scheduler
+
+obs-up:
+	$(COMPOSE) up -d prometheus tempo grafana
+
+obs-down:
+	$(COMPOSE) stop prometheus tempo grafana
+
+obs-logs:
+	$(COMPOSE) logs -f --tail=200 prometheus tempo grafana
+
+grafana:
+	@echo "Grafana:  http://localhost:3000  (admin / admin)"
+
+prometheus:
+	@echo "Prometheus: http://localhost:9090  (targets: /targets)"
+
+tempo:
+	@echo "Tempo:    http://localhost:3200  (query API)"
 
 ps:
 	$(COMPOSE) ps
@@ -229,4 +253,5 @@ purge-python:
         es-indices es-aliases es-clean-live seed unseed test test-unit test-integration \
         lint format typecheck consolidate consolidate-dry-run consolidate-window cleanup \
         logs-producer logs-indexer logs-analytics logs-vandalism logs-scheduler \
-        restart-pipeline pipeline purge purge-volumes purge-python
+        restart-pipeline pipeline obs-up obs-down obs-logs grafana prometheus tempo \
+        purge purge-volumes purge-python

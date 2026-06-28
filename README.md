@@ -107,6 +107,49 @@ make health
 
 ---
 
+## Observability (Prometheus + Tempo + Grafana)
+
+Every service is instrumented with Prometheus metrics and OpenTelemetry
+traces, with **W3C trace context propagated through Kafka headers** so a single
+trace spans the whole pipeline:
+
+```
+producer (SSE) -> wiki.raw -> demux -> { indexer -> ES, analytics -> PG, vandalism -> PG }
+```
+
+```bash
+make obs-up        # start Prometheus + Tempo + Grafana (already in `make dev`)
+make grafana       # http://localhost:3000  (admin / admin)
+make prometheus    # http://localhost:9090  (targets at /targets)
+make tempo         # http://localhost:3200  (Tempo query API)
+```
+
+| Service        | URL                          |
+| -------------- | ---------------------------- |
+| Grafana        | http://localhost:3000        |
+| Prometheus     | http://localhost:9090        |
+| Tempo (query)  | http://localhost:3200        |
+| API /metrics   | http://localhost:8000/metrics |
+
+Grafana auto-provisions the Prometheus + Tempo datasources and a
+"WikiPulse — Pipeline Overview" dashboard (throughput, HTTP p50/p95, stage
+latency p95, batch sizes, vandalism flag rate, scheduler runs, WS clients).
+
+Metrics ports (one prometheus_client HTTP listener per streaming service):
+`api :8000`, `producer :9101`, `demux :9102`, `indexer :9103`,
+`analytics :9104`, `vandalism :9105`, `scheduler :9106`.
+
+Key metric families: `wikipulse_producer_events_total`,
+`wikipulse_indexer_events_total`, `wikipulse_analytics_events_total`,
+`wikipulse_vandalism_events_total`, `wikipulse_event_processing_seconds`,
+`wikipulse_http_request_duration_seconds`, `wikipulse_bulk_index_batch_size`,
+`wikipulse_upsert_batch_size`, `wikipulse_ws_connected_clients`.
+
+Traces export over OTLP/HTTP to Tempo (`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`).
+Disable either layer with `OTEL_ENABLED=false` / `METRICS_ENABLED=false`.
+
+---
+
 ## Seed data
 
 ```bash
